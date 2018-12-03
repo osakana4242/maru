@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5d973f9442ecd1041acb1af6b7ad3374, type: 3}
+  m_Name: data
+  m_EditorClassIdentifier: 
+  piece: {fileID: 1457643406691200, guid: 136d0930d9653e04bb2d7fadd43e31e7, type: 2}
+  stage: {fileID: 1545009946988380, guid: 8844c8ae6c932d7459cb441f1fdc0945, type: 2}
+  bomb: {fileID: 1206063237894684, guid: 117631cb70b163b458522281357f3621, type: 2}
+  blast: {fileID: 1645734124846366, guid: ca536d21fc108d5479605533404d894c, type: 2}
+  config:
+    sizeX: 8
+    sizeY: 8
+    bombDistance: 1
+    moveForce: 10
+    moveForceControlSpeed: 5
+    jumpForce: 5
+    cameraMoveSpeed: 10
+    blastForce: 8
+    blinkInterval: 0.2
+    flipSpeed: 10
