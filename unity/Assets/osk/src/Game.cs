@@ -5,592 +5,307 @@ using UniRx;
 using UniRx.Triggers;
 using UnityEngine.UI;
 
-namespace Osk42
-{
-    public class Game : MonoBehaviour
-    {
+namespace Osk42 {
+	public class Game : MonoBehaviour {
 
-        public GameAssetData assets;
+		public GameAssetData assets;
 
-        public Data data;
+		public Data data;
 
-        class Mover : MonoBehaviour
-        {
-            public bool hitGround { get { return 0 < hitList.Count; } }
-            public List<GameObject> hitList;
-            void Awake()
-            {
-                hitList = new List<GameObject>();
-            }
-        }
+		class Mover : MonoBehaviour {
+			public bool hitGround { get { return 0 < hitList.Count; } }
+			public List<GameObject> hitList;
+			void Awake() {
+				hitList = new List<GameObject>();
+			}
+		}
 
-        public static class Key
-        {
-            public static KeyCode Jump = KeyCode.C;
-            public static KeyCode Put = KeyCode.Z;
-            public static KeyCode Fire = KeyCode.X;
-        }
+		public sealed class ScreenData {
+			public static readonly ScreenData instance = new ScreenData();
+			public readonly Vector2 design;
+			public readonly Vector2 curSize;
+			public readonly Vector2 exSize;
+			public readonly Rect exRect;
+			public readonly float rate;
 
-        // Use this for initialization
-        void Start()
-        {
+			public ScreenData() {
+				design = new Vector2(640, 480);
+				curSize = new Vector2(Screen.width, Screen.height);
+				rate = design.y / curSize.y;
+				exSize = new Vector2(design.x * rate, design.y);
+				exRect = new Rect(0, 0, exSize.x, exSize.y);
+			}
+		}
 
-            var tr = transform;
+		public static class Key {
+			public static KeyCode Jump = KeyCode.C;
+			public static KeyCode Put = KeyCode.Z;
+			public static KeyCode Fire = KeyCode.X;
+		}
 
-            data.canvas = GameObject.FindObjectOfType<Canvas>();
+		// Use this for initialization
+		void Start() {
+			var tr = transform;
 
-            data.stage = GameObject.Instantiate(assets.stage, new Vector3(0f, 0.2f, 0f), Quaternion.identity, tr);
+			data.canvas = GameObject.FindObjectOfType<Canvas>();
+			data.machine = GameObject.Find("machine");
 
-            data.progress = new Progress();
-            data.progress.currentPlayerIndex = 0;
+			data.progress = new Progress();
+			data.player = new Player();
 
-            data.players = new List<Player>(2);
-            for (var i = 0; i < 2; i++)
-            {
-                var player = new Player();
-                data.players.Add(player);
-            }
+			float radius = 200;
+			// 左周り.
+			var left = new CircleData();
+			left.radius = radius;
+			left.list = new Rect[] {
+				new Rect(0, 0, radius, radius),
+				new Rect(radius, 0, radius, radius),
+				new Rect(radius, radius, radius, radius),
+				new Rect(0, radius, radius, radius),
+			};
+			left_ = left;
+			// 右回り.
+			var right = new CircleData();
+			right.radius = radius;
+			right.list = new Rect[] {
+				new Rect(0, 0, radius, radius),
+				new Rect(0, radius, radius, radius),
+				new Rect(radius, radius, radius, radius),
+				new Rect(radius, 0, radius, radius),
+			};
+			right_ = right;
+		}
 
-            var cellCount = assets.config.sizeX * assets.config.sizeY;
-            data.cells = new List<Cell>(cellCount);
-            for (var i = 0; i < cellCount; i++)
-            {
-                var cell = new Cell();
-                cell.id = new ObjectId(ObjectType.Cell, i);
-                cell.position = getCellPosition(i);
-                data.cells.Add(cell);
-            }
+		public enum StateId {
+			Init,
+			Ready,
+			Main,
+			Wait,
+			Result1,
+			Result2,
+		}
 
-            var pieceCount = cellCount;
-            data.pieces = new List<Piece>(pieceCount);
-            for (var i = 0; i < pieceCount; i++)
-            {
-                var piece = new Piece();
-                piece.id = new ObjectId(ObjectType.Piece, i);
-                piece.position = getCellPosition(i);
-                piece.state = PieceState.Sleep;
+		public static class MathHelper {
+			public static bool isIn(int v, int min, int max) {
+				return min <= v && v < max;
+			}
+			public static bool isIn(float v, float min, float max) {
+				return min <= v && v < max;
+			}
+		}
 
-                piece.go = GameObject.Instantiate(assets.piece, Vector3.zero, Quaternion.identity, tr);
+		public bool isIn(Vector2 position) {
+			if (!MathHelper.isIn(position.x, 0, assets.config.sizeX)) return false;
+			if (!MathHelper.isIn(position.y, 0, assets.config.sizeY)) return false;
+			return true;
+		}
 
-                data.pieces.Add(piece);
-            }
-        }
+		public class CircleData {
+			public float radius;
+			public Rect[] list;
 
-        public void firstPut()
-        {
-            {
-                Vector2 center = new Vector2((assets.config.sizeX - 1) / 2, (assets.config.sizeY - 1) / 2);
-
-                {
-                    var piece = activatePiece();
-                    piece.pieceType = PieceType.White;
-                    piece.position = center + new Vector2(0, 0);
-                    piece.state = PieceState.Fix;
-                }
-                {
-                    var piece = activatePiece();
-                    piece.pieceType = PieceType.Black;
-                    piece.position = center + new Vector2(1, 0);
-                    piece.state = PieceState.Fix;
-                }
-                {
-                    var piece = activatePiece();
-                    piece.pieceType = PieceType.Black;
-                    piece.position = center + new Vector2(0, 1);
-                    piece.state = PieceState.Fix;
-                }
-                {
-                    var piece = activatePiece();
-                    piece.pieceType = PieceType.White;
-                    piece.position = center + new Vector2(1, 1);
-                    piece.state = PieceState.Fix;
-                }
-            }
-        }
-
-        public Piece activatePiece()
-        {
-            var piece = data.pieces.Find((_item) => _item.state == PieceState.Sleep);
-            if (piece == null) return null;
-            piece.go.transform.rotation = Quaternion.Euler(0f, 0f, 90f);
-            piece.state = PieceState.Hover;
-            return piece;
-        }
-
-        Vector3 getPos(Vector2 pos)
-        {
-            Vector2 leftTop = new Vector2(-4, -4) + new Vector2(0.5f, 0.5f);
-            Vector2 pos2 = leftTop + pos;
-            return new Vector3(pos2.x, 0.4f, pos2.y);
-        }
-
-        Vector2 getCellPosition(int id)
-        {
-            return new Vector2(id % assets.config.sizeX, id / assets.config.sizeY);
-        }
-
-        public void playBomb(Vector3 pos)
-        {
-            var go = GameObject.Instantiate(assets.blast, pos, Quaternion.identity, transform);
-            Observable.Return(go).
-                Delay(System.TimeSpan.FromSeconds(1f)).
-                Do(_go => GameObject.Destroy(_go)).
-                Subscribe().
-                AddTo(this);
-        }
-
-        public void OnGUI()
-        {
-            using (var area1 = new GUILayout.AreaScope(new Rect(0, 0, 320, 320)))
-            {
-            }
-        }
-
-        public enum StateId
-        {
-            Init,
-            PlayerInit,
-            Hover,
-            Fix,
-            Wait,
-            Result1,
-            Result2,
-        }
-
-        public Player CurrentPlayer { get { return data.players[data.progress.currentPlayerIndex]; } }
-
-        public static class MathHelper
-        {
-            public static bool isIn(int v, int min, int max)
-            {
-                return min <= v && v < max;
-            }
-            public static bool isIn(float v, float min, float max)
-            {
-                return min <= v && v < max;
-            }
-        }
-
-        public bool isIn(Vector2 position)
-        {
-            if (!MathHelper.isIn(position.x, 0, assets.config.sizeX)) return false;
-            if (!MathHelper.isIn(position.y, 0, assets.config.sizeY)) return false;
-            return true;
-        }
-
-        public bool canPut(Piece piece)
-        {
-            if (!isIn(piece.position)) return false;
-            var otherPiece = data.pieces.Find(_item =>
-            {
-                if (_item.state != PieceState.Fix) return false;
-                if (_item.id == piece.id) return false;
-                return (_item.position == piece.position);
-            });
-            return otherPiece == null;
-        }
-
-        /** 集計 */
-        IObservable<Unit> changePiecesAsObservable(Piece lastPiece)
-        {
-            var pieceStreams = new List<IObservable<Unit>>();
-            var changePieces = new List<Piece>();
-
-            pieceStreams.Add(Observable.ReturnUnit());
-
-            foreach (var dir in dires)
-            {
-                changePieces.Clear();
-                getChangePiece(lastPiece, dir, ref changePieces);
-
-                for (var i = 0; i < changePieces.Count; i++)
-                {
-                    var piece = changePieces[i];
-                    var delay = i * 0.1f;
-                    var stream = Observable.ReturnUnit().
-                    Delay(System.TimeSpan.FromSeconds(delay)).
-                    Do(_ =>
-                    {
-                        piece.pieceType = getOtherPieceType(piece.pieceType);
-                        CurrentPlayer.score += 10;
-                    });
-                    pieceStreams.Add(stream);
-                }
-            }
-            return Observable.Zip(pieceStreams).Select(_ => Unit.Default);
-        }
-
-        PieceType getOtherPieceType(PieceType type)
-        {
-            return (type == PieceType.White) ?
-                PieceType.Black :
-                PieceType.White;
-        }
-
-        Vector2[] dires = {
-            new Vector2(1, 0),
-            new Vector2(1, 1),
-            new Vector2(0, 1),
-            new Vector2(-1, 1),
-            new Vector2(-1, 0),
-            new Vector2(-1, -1),
-            new Vector2(0, -1),
-            new Vector2(1, -1),
-        };
-
-        Piece findPiece(Vector2 pos)
-        {
-            return data.pieces.Find(_item =>
-            {
-                if (_item.state != PieceState.Fix) return false;
-                return _item.position == pos;
-            });
-        }
-
-        void getChangePiece(Piece piece, Vector2 dir, ref List<Piece> pieces)
-        {
-            var firstPos = piece.position + dir;
-            var pos = firstPos;
-            while (true)
-            {
-                var nextPiece = findPiece(pos);
-                if (nextPiece == null)
-                {
-                    return;
-                }
-                if (nextPiece.pieceType == piece.pieceType)
-                {
-                    break;
-                }
-                pos += dir;
-            }
-            var lastPos = pos;
-            if (firstPos == lastPos) return;
-            pos = firstPos;
-
-            while (pos != lastPos)
-            {
-                var nextPiece = findPiece(pos);
-                if (nextPiece.pieceType == piece.pieceType)
-                {
-                    break;
-                }
-                pieces.Add(nextPiece);
-                pos += dir;
-            }
-        }
-
-        // Update is called once per frame
-        void Update()
-        {
-            switch (data.progress.stateId)
-            {
-                case StateId.Init:
-                    {
-                        data.players.ForEach(_pl => {
-                            _pl.piece = null;
-                            _pl.score = 0;
-                            _pl.result = PlayerResult.None;
-                        });
-                        data.pieces.ForEach(_piece => {
-                            _piece.state = PieceState.Sleep;
-                        });
-                        data.progress.turn = 0;
-
-                        data.progress.stateId = StateId.Wait;
-                        Observable.ReturnUnit().
-                        Delay(System.TimeSpan.FromSeconds(0.25f)).
-                        Do(_ => firstPut()).
-                        Delay(System.TimeSpan.FromSeconds(0.5f)).
-                        TakeUntilDestroy(gameObject).
-                        Subscribe(_ =>
-                        {
-                            data.progress.stateId = StateId.PlayerInit;
-                        });
-                        break;
-                    }
-                case StateId.PlayerInit:
-                    {
-                        var piece = activatePiece();
-                        if (piece == null)
-                        {
-                            data.progress.stateId = StateId.Result1;
-                            break;
-                        }
-                        var pl = CurrentPlayer;
-                        pl.piece = piece;
-                        data.progress.stateId = StateId.Hover;
-                        break;
-                    }
-                case StateId.Hover:
-                    {
-                        var pl = CurrentPlayer;
-                        var piece = pl.piece;
-                        {
-                            Vector2 diff = Vector2.zero;
-                            if (Input.GetKeyDown(KeyCode.LeftArrow))
-                            {
-                                diff.x = -1;
-                            }
-                            if (Input.GetKeyDown(KeyCode.RightArrow))
-                            {
-                                diff.x = 1;
-                            }
-                            if (Input.GetKeyDown(KeyCode.UpArrow))
-                            {
-                                diff.y = 1;
-                            }
-                            if (Input.GetKeyDown(KeyCode.DownArrow))
-                            {
-                                diff.y = -1;
-                            }
-                            var nextPos = piece.position + diff;
-                            nextPos.x = Mathf.Clamp(nextPos.x, 0, assets.config.sizeX - 1);
-                            nextPos.y = Mathf.Clamp(nextPos.y, 0, assets.config.sizeY - 1);
-                            piece.position = nextPos;
-                        }
-
-                        if (Input.GetKeyDown(KeyCode.X))
-                        {
-                            piece.pieceType = (piece.pieceType == PieceType.White) ?
-                                PieceType.Black :
-                                PieceType.White;
-                        }
-
-                        if (Input.GetKeyDown(KeyCode.Z))
-                        {
-                            if (canPut(piece))
-                            {
-                                data.progress.stateId = StateId.Wait;
-                                piece.state = PieceState.Fix;
-                                changePiecesAsObservable(piece).
-                                Delay(System.TimeSpan.FromSeconds(0.25f)).
-                                TakeUntilDestroy(gameObject).
-                                Subscribe(_ =>
-                                {
-                                    data.progress.stateId = StateId.Fix;
-                                });
-                            }
-                        }
-                        break;
-                    }
-                case StateId.Fix:
-                    {
-                        var pl = CurrentPlayer;
-                        data.progress.currentPlayerIndex = (data.progress.currentPlayerIndex + 1) % data.players.Count;
-                        data.progress.stateId = StateId.PlayerInit;
-                        data.progress.turn += 1;
-                        break;
-                    }
-                case StateId.Result1:
-                    {
-                        data.progress.stateId = StateId.Wait;
-                        Observable.ReturnUnit().
-                            Delay(System.TimeSpan.FromSeconds(0.5f)).
-                            TakeUntilDestroy(gameObject).
-                            Subscribe(_ =>
-                            {
-                                var winner = (data.players[1].score < data.players[0].score) ?
-                                    data.players[0] :
-                                    data.players[1];
-                                foreach (var pl in data.players)
-                                {
-                                    pl.result = (pl == winner) ?
-                                        PlayerResult.Win :
-                                        PlayerResult.Lose;
-                                }
+			public int hitIndex;
+			public int hitCount;
+			public int preHitCount;
+		}
+		CircleData left_;
+		CircleData right_;
 
 
-                                data.progress.stateId = StateId.Result2;
-                            });
-                        break;
-                    }
-                case StateId.Result2:
-                    {
-                        if (Input.GetKeyDown(KeyCode.Z)) {
-                            data.progress.stateId = StateId.Init;
-                        }
-                        break;
-                    }
-            }
-            UpdateView();
-        }
+		public static class ArrayHelper {
+			public static int FindIndex<T1, T2>(T1[] self, T2 prm, System.Func<T1, T2, bool> f) {
+				for (var i = 0; i < self.Length; i++) {
+					var item = self[i];
+					if (f(item, prm)) return i;
+				}
+				return -1;
+			}
+		}
 
-        static bool isBlink(float interval)
-        {
-            return (Time.time % (interval * 2)) < interval;
-        }
+		public static void CheckCircle(CircleData c, Vector2 ipos) {
+			c.preHitCount = c.hitCount;
+			var preIndex = c.hitIndex;
+			var offs = new Vector2(
+				(ScreenData.instance.exSize.x - c.radius * 2) * 0.5f,
+				(ScreenData.instance.exSize.y - c.radius * 2) * 0.5f
+			);
+			int index = ArrayHelper.FindIndex(c.list, ipos - offs, (_item, _prm) => {
+				return _item.Contains(_prm);
+			});
+			c.hitIndex = index;
+			if (index == -1) {
+				c.hitCount = 0;
+				return;
+			}
+			var diff = (index - preIndex + c.list.Length) % c.list.Length;
+			if (diff == 0) {
+				// stay
+			} else if (diff == 1) {
+				c.hitCount++;
+			} else {
+				c.hitCount = 0;
+			}
+		}
 
-        void UpdateView()
-        {
-            {
-                var uiTr = data.canvas.transform.Find("progress");
-                var uiText = uiTr.GetComponent<Text>();
-                var text = string.Format("TURN {0}", data.progress.turn);
-                uiText.text = text;
-            }
+		// Update is called once per frame
+		void Update() {
+			switch (data.progress.stateId) {
+				case StateId.Init:
+					data.progress.elapsedTime = 0f;
+					data.player.power = 0f;
+					data.player.rotScore = 0f;
+					data.progress.stateId = StateId.Ready;
+					break;
+				case StateId.Ready:
+					if (Input.GetMouseButtonDown(0)) {
+						data.progress.stateId = StateId.Wait;
+						Observable.ReturnUnit().
+							Delay(System.TimeSpan.FromSeconds(0.5f)).
+							Do(_ => {
+								data.progress.stateId = StateId.Main;
+							}).
+							TakeUntilDestroy(gameObject).
+							Subscribe();
+					}
+					break;
+				case StateId.Main: {
 
-            for (var i = 0; i < data.players.Count; i++)
-            {
-                var pl = data.players[i];
-                var uiName = string.Format("p{0}", i + 1);
-                var uiTr = data.canvas.transform.Find(uiName);
-                var uiText = uiTr.GetComponent<Text>();
-                var isB = isBlink(assets.config.blinkInterval);
-                var isCuurentPlayer = (i == data.progress.currentPlayerIndex);
-                var cursor = (pl.result != PlayerResult.None) ? "":
-                    isCuurentPlayer ?
-                        (isB ? "<" : "") :
-                        "";
-                var text =
-                    string.Format("PLAYER{0}{1}\n", i + 1, cursor) +
-                    string.Format("SCORE {0}\n", pl.score);
+						if (Input.GetMouseButton(0)) {
+							var ipos = Input.mousePosition * ScreenData.instance.rate;
+							CheckCircle(right_, ipos);
+							// Debug.Log(
+							// 	"fc: " + Time.frameCount +
+							// 	", ipos: " + ipos +
+							// 	", index: " + right_.hitIndex +
+							// 	", count: " + right_.hitCount
+							// );
 
-                if (pl.result != PlayerResult.None)
-                {
-                    if (pl.result == PlayerResult.Win)
-                    {
-                        if (isB)
-                        {
-                            text += "WIN\n";
-                        }
-                    }
-                    else
-                    {
-                        //text += "LOSE";
-                    }
-                }
+						} else {
+							right_.preHitCount = right_.hitCount;
+							right_.hitCount = 0;
+							right_.hitIndex = -1;
+						}
+						var player = data.player;
+						if (1 < right_.hitCount && right_.preHitCount < right_.hitCount) {
+							player.power += assets.config.machineSpeed;
+							player.power -= 0.98f * Time.deltaTime;
+						} else if (0 < right_.hitCount) {
+							player.power -= 0.98f * Time.deltaTime;
+						} else {
+							// つまずき.
+							if (0f < right_.preHitCount) {
+								player.power *= 0.25f;
+							} else {
+								player.power -= 0.98f * Time.deltaTime;
+							}
+						}
+						if (player.power <= 0) {
+							player.power = 0f;
+						}
 
-                uiText.text = text;
-            }
+						{
+							var euler = data.machine.transform.rotation.eulerAngles;
+							euler.y += player.power * Time.deltaTime;
+							player.rotScore += player.power * Time.deltaTime;
+							data.machine.transform.rotation = Quaternion.Euler(euler);
+						}
+						data.progress.elapsedTime += Time.deltaTime;
+						if (data.progress.timeLimit <= data.progress.elapsedTime) {
+							data.progress.elapsedTime = data.progress.timeLimit;
+							data.progress.stateId = StateId.Result1;
+						}
 
-            foreach (var piece in data.pieces)
-            {
-                var go = piece.go;
-                go.SetActive(piece.state != PieceState.Sleep);
+						break;
+					}
+				case StateId.Result1:
+					data.progress.stateId = StateId.Wait;
+					Observable.ReturnUnit().
+						Delay(System.TimeSpan.FromSeconds(0.5f)).
+						Do(_ => {
+							data.progress.stateId = StateId.Result2;
+						}).
+						TakeUntilDestroy(gameObject).
+						Subscribe();
+					break;
+				case StateId.Result2:
+					if (Input.GetMouseButtonDown(0)) {
+						data.progress.stateId = StateId.Init;
+					}
+					break;
+			}
 
-                var pos = getPos(piece.position);
-                if (piece.state == PieceState.Hover)
-                {
-                    pos.y += 0.2f;
-                    go.SetActive(isBlink(assets.config.blinkInterval));
-                }
 
-                go.transform.position = pos;
+			UpdateView();
+		}
 
-                Quaternion nextRot;
-                switch (piece.pieceType)
-                {
-                    case PieceType.Black:
-                        nextRot = Quaternion.Euler(0f, 0f, 180f);
-                        break;
-                    case PieceType.White:
-                    default:
-                        nextRot = Quaternion.Euler(0f, 0f, 0f);
-                        break;
-                }
-                var curRot = go.transform.rotation;
-                go.transform.rotation = Quaternion.Lerp(curRot, nextRot, Time.deltaTime * assets.config.flipSpeed);
-            }
-        }
+		static bool isBlink(float interval) {
+			return (Time.time % (interval * 2)) < interval;
+		}
 
-        [System.Serializable]
-        public class Data
-        {
-            public Canvas canvas;
-            public Progress progress;
-            public GameObject stage;
-            public List<Player> players;
-            public List<Cell> cells;
-            public List<Piece> pieces;
-        }
+		void UpdateView() {
+			var progress = data.canvas.transform.Find("progress").GetComponent<Text>();
+			var restTime = Mathf.Max(0f, data.progress.timeLimit - data.progress.elapsedTime);
+			progress.text =
+				string.Format("残り時間 {0:F2} 秒\n", restTime) +
+				string.Format("スコア {0:F2} 回転\n", data.player.rotScore / 360f) +
+				string.Format("継続力 {0}\n", right_.hitCount) +
+				string.Format("回転力 {0:F2}\n", data.player.power) +
+				"";
+			var circleText = data.canvas.transform.Find("circle_text").GetComponent<Graphic>();
+			circleText.enabled = data.progress.stateId == StateId.Ready;
+			var circleRect = data.canvas.transform.Find("circle_area").GetComponent<Graphic>();
+			circleRect.enabled = data.progress.stateId == StateId.Ready;
+		}
 
-        public class Progress
-        {
-            public StateId stateId = StateId.Init;
-            public int currentPlayerIndex;
-            public int turn;
-        }
+		[System.Serializable]
+		public class Data {
+			public Canvas canvas;
+			public Progress progress;
+			public Player player;
+			public GameObject machine;
+			public GameObject stage;
+		}
 
-        public enum PlayerResult
-        {
-            None,
-            Win,
-            Lose,
-        }
+		public class Progress {
+			public StateId stateId = StateId.Init;
+			public float elapsedTime = 0f;
+			public float timeLimit = 30f;
 
-        public class Player
-        {
-            public ObjectId id;
-            public int score;
-            public Piece piece;
-            public PlayerResult result;
-        }
+		}
 
-        public class Cell
-        {
-            public ObjectId id;
-            public Vector2 position;
-        }
+		public class Player {
+			public float power = 0;
+			public float rotScore = 0f;
+		}
 
-        public class Piece
-        {
-            public ObjectId id;
-            public Vector2 position;
-            public PieceType pieceType;
-            public PieceState state;
-            public GameObject go;
-        }
+		public enum ObjectType {
+			Player,
+			Cell,
+			Piece,
+		}
 
-        public enum PieceState
-        {
-            Sleep,
-            Hover,
-            Fix,
-        }
-
-        public enum ObjectType
-        {
-            Player,
-            Cell,
-            Piece,
-        }
-
-        public struct ObjectId : System.IEquatable<ObjectId>
-        {
-            public readonly int id;
-            public ObjectId(ObjectType type, int id) : this()
-            {
-                this.id = ((int)type << 8) | id;
-            }
-            public bool Equals(ObjectId other)
-            {
-                return id == other.id;
-            }
-            public override bool Equals(object obj)
-            {
-                var other = obj as ObjectId?;
-                if (other == null) return false;
-                return Equals(other);
-            }
-            public override int GetHashCode()
-            {
-                return id;
-            }
-            public static bool operator ==(ObjectId a, ObjectId b)
-            {
-                return a.Equals(b);
-            }
-            public static bool operator !=(ObjectId a, ObjectId b)
-            {
-                return !a.Equals(b);
-            }
-        }
-
-        public enum PieceType
-        {
-            White,
-            Black,
-        }
-    }
+		public struct ObjectId : System.IEquatable<ObjectId> {
+			public readonly int id;
+			public ObjectId(ObjectType type, int id) : this() {
+				this.id = ((int)type << 8) | id;
+			}
+			public bool Equals(ObjectId other) {
+				return id == other.id;
+			}
+			public override bool Equals(object obj) {
+				var other = obj as ObjectId?;
+				if (other == null) return false;
+				return Equals(other);
+			}
+			public override int GetHashCode() {
+				return id;
+			}
+			public static bool operator ==(ObjectId a, ObjectId b) {
+				return a.Equals(b);
+			}
+			public static bool operator !=(ObjectId a, ObjectId b) {
+				return !a.Equals(b);
+			}
+		}
+	}
 }

@@ -21,6 +21,7 @@ namespace Osk42 {
 			public float blastForce = 10f;
 			public float blinkInterval = 0.2f;
 			public float flipSpeed = 0.1f;
+			public float machineSpeed = 15f;
 		}
 #if UNITY_EDITOR
 		[UnityEditor.MenuItem("UNKO/FUGA")]

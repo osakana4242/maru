@@ -26,3 +26,4 @@ MonoBehaviour:
     blastForce: 8
     blinkInterval: 0.2
     flipSpeed: 10
+    machineSpeed: 1
