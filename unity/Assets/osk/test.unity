@@ -1101,9 +1101,9 @@ MonoBehaviour:
     m_TypeName: UnityEngine.UI.MaskableGraphic+CullStateChangedEvent, UnityEngine.UI,
       Version=1.0.0.0, Culture=neutral, PublicKeyToken=null
   m_FontData:
-    m_Font: {fileID: 10102, guid: 0000000000000000e000000000000000, type: 0}
+    m_Font: {fileID: 12800000, guid: 803f75872467dc241a4043cb43e56305, type: 3}
     m_FontSize: 20
-    m_FontStyle: 1
+    m_FontStyle: 0
     m_BestFit: 0
     m_MinSize: 0
     m_MaxSize: 40
@@ -1755,9 +1755,9 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 89.08, y: -30.2}
-  m_SizeDelta: {x: 160, y: 41.899994}
-  m_Pivot: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: 8, y: -8}
+  m_SizeDelta: {x: 240, y: 240}
+  m_Pivot: {x: 0, y: 1}
 --- !u!114 &1935554270
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1778,19 +1778,19 @@ MonoBehaviour:
     m_TypeName: UnityEngine.UI.MaskableGraphic+CullStateChangedEvent, UnityEngine.UI,
       Version=1.0.0.0, Culture=neutral, PublicKeyToken=null
   m_FontData:
-    m_Font: {fileID: 10102, guid: 0000000000000000e000000000000000, type: 0}
+    m_Font: {fileID: 12800000, guid: 803f75872467dc241a4043cb43e56305, type: 3}
     m_FontSize: 20
-    m_FontStyle: 1
+    m_FontStyle: 0
     m_BestFit: 0
     m_MinSize: 2
     m_MaxSize: 40
     m_Alignment: 0
     m_AlignByGeometry: 0
     m_RichText: 1
-    m_HorizontalOverflow: 0
+    m_HorizontalOverflow: 1
     m_VerticalOverflow: 1
     m_LineSpacing: 1
-  m_Text: HOGE
+  m_Text: "\u6B8B\u308A 30.00 \u79D2\n\u30B9\u30B3\u30A2 10.00 \u56DE\u8EE2"
 --- !u!222 &1935554271
 CanvasRenderer:
   m_ObjectHideFlags: 0
